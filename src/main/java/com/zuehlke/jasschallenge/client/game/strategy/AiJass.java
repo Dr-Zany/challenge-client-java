@@ -3,20 +3,27 @@ package com.zuehlke.jasschallenge.client.game.strategy;
 import ai.onnxruntime.*; // Import necessary classes
 import com.zuehlke.jasschallenge.client.game.GameSession;
 import com.zuehlke.jasschallenge.client.game.Move;
+import com.zuehlke.jasschallenge.client.game.Round;
 import com.zuehlke.jasschallenge.game.cards.Card;
 import com.zuehlke.jasschallenge.game.mode.Mode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.nio.FloatBuffer;
+import java.nio.LongBuffer;
 import java.util.*;
+
 
 public class AiJass implements JassStrategy {
 
+    private static final Logger log = LoggerFactory.getLogger(AiJass.class);
     OrtEnvironment o_environment;
     OrtSession.SessionOptions o_options;
     OrtSession o_session;
 
     int moveCount = 0;
-    Vector<Card> history = new Vector<>();
-    Vector<Card> ontable = new Vector<>();
+    List<Card> history = new Vector<>();
+    List<Card> ontable = new Vector<>();
 
     public AiJass(String path) throws OrtException {
         o_environment = OrtEnvironment.getEnvironment();
@@ -31,95 +38,64 @@ public class AiJass implements JassStrategy {
         System.arraycopy(src, 0, dest, index, src.length);
     }
 
-    private float[] convertCard(Card card) {
-        float[] cardVec = new float[13];
-        for (float i : cardVec)
-            i = 0;
 
-        switch (card.getColor()){
-            case SPADES:
-                cardVec[12] = 1;
-                break;
-            case HEARTS:
-                cardVec[11] = 1;
-                break;
-            case DIAMONDS:
-                cardVec[10] = 1;
-                break;
-            case CLUBS:
-                cardVec[9] = 1;
-                break;
+    private OnnxTensor creatState(List<Card> hand) throws OrtException {
+        long[] stateIndices = new long[71];
+        int i = 0;
+
+        for(int y = 0; y < history.size(); y++) {
+            stateIndices[y + i] = history.get(y).ordinal() + 1;
         }
+        i += history.size();
+        while(i < 32) {stateIndices[i] = 0; i++;}
 
-        cardVec[card.getValue().getRank() - 1] = 1;
+        for (int y = 0; y < ontable.size(); y++) {
+            stateIndices[y + i] = ontable.get(y).ordinal() + 1;
+        }
+        i += ontable.size();
+        while(i < 35) {stateIndices[i] = 0; i++;}
 
-        return cardVec;
+        for(int y = 0; y < hand.size(); y++) {
+            stateIndices[y + i] = hand.get(y).ordinal() + 1;
+        }
+        i += hand.size();
+        while(i < 44) {stateIndices[i] = 0; i++;}
+
+        while(i < stateIndices.length) {stateIndices[i] = 0; i++;}
+
+        OnnxTensor stateIdxTensor = OnnxTensor.createTensor(
+                o_environment,
+                LongBuffer.wrap(stateIndices),
+                new long[]{1, 71}
+        );
+
+        return stateIdxTensor;
     }
 
-    private OnnxTensor creatState(Vector<Card> hand, Mode mode) throws OrtException {
-        float[] state = new float[929];
-        int i = 0;
-        for (Card card : history) {
-            float[] cardVec = convertCard(card);
-            copyArrayTo(cardVec, state, i);
-            i += 13;
-        }
-
-        for(Card card : ontable) {
-            float[] cardVec = convertCard(card);
-            copyArrayTo(cardVec, state, i);
-            i += 13;
-        }
-
-        for(Card card : hand) {
-            float[] cardVec = convertCard(card);
-            copyArrayTo(cardVec, state, i);
-        }
-
-        // fill next (hand.size() - 9) * 13 with Zeros
-        for(int y = 0; y < (hand.size() - 9) * 13; y++)
-            state[i + y] = 0;
-
-        i += (hand.size() - 9) * 13;
-
-        // fill rest with Zeros
-        for(int y = i; y < state.length ; y++)
-            state[y] = 0;
+    private OnnxTensor creatTrumpOneHot(Mode mode) throws OrtException {
+        float[] trump = new float[7];
 
         switch (mode.getTrumpfName()){
             case OBEABE:
-                state[state.length - 6] = 1;
+                trump[6] = 1;
                 break;
-
             case UNDEUFE:
-                state[state.length - 5] = 1;
+                trump[5] = 1;
                 break;
-
             case TRUMPF:
-                switch (mode.getTrumpfColor()){
-                    case SPADES:
-                        state[state.length - 4] = 1;
-                        break;
-
-                    case HEARTS:
-                        state[state.length - 3] = 1;
-                        break;
-
-                    case DIAMONDS:
-                        state[state.length - 2] = 1;
-                        break;
-
-                    case CLUBS:
-                        state[state.length - 1] = 1;
-                        break;
-                }
+                trump[mode.getTrumpfColor().ordinal() + 1] = 1;
+                break;
+            case SCHIEBE:
+                break;
         }
 
-        long[] inputShape = {1, state.length};
-        // Create the input tensor (requires multi-dimensional array)
-        float[][] inputData = {state}; // Wrap the flat array in another array
+        OnnxTensor trumpTensor = OnnxTensor.createTensor(
+                o_environment,
+                FloatBuffer.wrap(trump),
+                new long[]{1, 7}
+        );
 
-        return OnnxTensor.createTensor(o_environment, inputData);
+        return trumpTensor;
     }
 
     @Override
@@ -129,31 +105,50 @@ public class AiJass implements JassStrategy {
 
     @Override
     public Card chooseCard(Set<Card> availableCards, GameSession session) {
-        List<Card> cards = availableCards.stream().toList();
+        List<Card> cards = new ArrayList<>(availableCards);
+        Round round = session.getCurrentRound();
         try {
-            OnnxTensor state = creatState((Vector<Card>) cards, session.getCurrentGame().getCurrentRound().getMode());
-            String inputName = o_session.getInputNames().iterator().next();
-            OrtSession.Result results = o_session.run(Collections.singletonMap(inputName, state));
+            OnnxTensor state = creatState(cards);
+            OnnxTensor trump = creatTrumpOneHot(round.getMode());
 
-            String outputName = o_session.getOutputNames().iterator().next();
-            Optional<OnnxValue> outputValue = results.get(outputName);
+            Map<String, OnnxTensor> input = new HashMap<>();
+            input.put("state_idx", state);
+            input.put("trump_onehot", trump);
 
-            if(outputValue.isEmpty())
-                throw new IllegalArgumentException("Output name " + outputName + " not found");
+            try(OrtSession.Result output = o_session.run(input)) {
+                OnnxTensor policyLogProbs = (OnnxTensor)output.get("policy_log_probs").get();
+                float[] logProbabilities = policyLogProbs.getFloatBuffer().array();
 
-            float[] values = ((float[][])outputValue.get().getValue())[0];
+                List<Map.Entry<Integer, Float>> prob = new ArrayList<>();
+                for(int i = 0; i < logProbabilities.length; i++ ) {
+                    prob.add(new AbstractMap.SimpleEntry<>(i, logProbabilities[i]));
+                }
 
-            int predict = 0;
-            for (int i = 0; i < values.length; i++) {
-                if(values[i] > values[predict])
-                    predict = i;
+                prob.sort(Map.Entry.comparingByValue());
+
+                for(Map.Entry<Integer, Float> probEntry : prob) {
+                    if(probEntry.getKey() < cards.size()) {
+                        log.info(cards.get(probEntry.getKey()).toString() + ":" + probEntry.getValue());
+                    }
+                    else {
+                        log.info("Empty: " + probEntry.getValue());
+                    }
+                }
+
+                for(int i = prob.size() - 1; i >= 0; i--) {
+                    if(prob.get(i).getKey() >= cards.size()) {
+                        log.info("trying to play empty card");
+                        continue;
+                    }
+                    if(round.isLegal(cards.get(prob.get(i).getKey())))
+                       return cards.get(prob.get(i).getKey());
+                }
             }
-
-            return cards.get(predict);
 
         } catch (OrtException e) {
             throw new RuntimeException(e);
         }
+        return null;
     }
 
     @Override

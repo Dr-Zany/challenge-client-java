@@ -24,8 +24,10 @@ public class Application {
     private static final String LOCAL_URL = "ws://127.0.0.1:3000";
 
     public static void main(String[] args) throws Exception {
-        String modelPath = args[1];
-        String websocketUrl = parseWebsocketUrlOrDefault(args);
+        String modelPath = args[0];
+        System.out.println(modelPath);
+        //String websocketUrl = parseWebsocketUrlOrDefault(args);
+        String websocketUrl = LOCAL_URL;
 
         JassStrategy strategy = new AiJass(modelPath);
         Player myLocalPlayer = new Player(BOT_NAME, strategy);
