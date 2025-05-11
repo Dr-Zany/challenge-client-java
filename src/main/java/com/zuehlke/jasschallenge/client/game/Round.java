@@ -57,10 +57,10 @@ public class Round {
         return moves.get(0).getPlayedCard().getColor();
     }
 
-    public boolean isLegal(Card card) {
+    public boolean isLegal(Card card, List<Card> hand) {
         if (card == null) return false;
         Color c = card.getColor();
-        return c == getRoundColor() || c == getMode().getTrumpfColor() || getPlayedCards().stream().noneMatch(n -> n.getColor().equals(c));
+        return c == getRoundColor() || c == getMode().getTrumpfColor() || hand.stream().noneMatch(n -> n.getColor().equals(getRoundColor()));
     }
 
     public Player getWinner() {

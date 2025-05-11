@@ -8,8 +8,7 @@ import com.zuehlke.jasschallenge.game.cards.Card;
 import com.zuehlke.jasschallenge.game.mode.Mode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.nio.FloatBuffer;
+import java.util.concurrent.TimeUnit;
 import java.nio.LongBuffer;
 import java.util.*;
 
@@ -19,28 +18,26 @@ public class AiJass implements JassStrategy {
     private static final Logger log = LoggerFactory.getLogger(AiJass.class);
     OrtEnvironment o_environment;
     OrtSession.SessionOptions o_options;
-    OrtSession o_session;
+    OrtSession o_sessionPlay;
+    OrtSession o_sessionTrump;
+    OrtSession o_sessionTime;
 
     int moveCount = 0;
     List<Card> history = new Vector<>();
-    List<Card> ontable = new Vector<>();
+    List<Card> onTable = new Vector<>();
 
-    public AiJass(String path) throws OrtException {
+    public AiJass(String playPath, String trumpPath, String timePath) throws OrtException {
         o_environment = OrtEnvironment.getEnvironment();
         o_options = new OrtSession.SessionOptions();
 
-        o_session = o_environment.createSession(path, o_options);
-    }
-
-    private void copyArrayTo(float[] src, float[] dest, int index) {
-        if(src.length + index >= dest.length)
-            throw new ArrayIndexOutOfBoundsException();
-        System.arraycopy(src, 0, dest, index, src.length);
+        o_sessionPlay = o_environment.createSession(playPath, o_options);
+        o_sessionTrump = o_environment.createSession(trumpPath, o_options);
+        o_sessionTime = o_environment.createSession(timePath, o_options);
     }
 
 
-    private OnnxTensor creatState(List<Card> hand) throws OrtException {
-        long[] stateIndices = new long[71];
+    private OnnxTensor creatState(List<Card> hand, Mode mode) throws OrtException {
+        long[] stateIndices = new long[72];
         int i = 0;
 
         for(int y = 0; y < history.size(); y++) {
@@ -49,10 +46,10 @@ public class AiJass implements JassStrategy {
         i += history.size();
         while(i < 32) {stateIndices[i] = 0; i++;}
 
-        for (int y = 0; y < ontable.size(); y++) {
-            stateIndices[y + i] = ontable.get(y).ordinal() + 1;
+        for (int y = 0; y < onTable.size(); y++) {
+            stateIndices[y + i] = onTable.get(y).ordinal() + 1;
         }
-        i += ontable.size();
+        i += onTable.size();
         while(i < 35) {stateIndices[i] = 0; i++;}
 
         for(int y = 0; y < hand.size(); y++) {
@@ -63,43 +60,107 @@ public class AiJass implements JassStrategy {
 
         while(i < stateIndices.length) {stateIndices[i] = 0; i++;}
 
-        OnnxTensor stateIdxTensor = OnnxTensor.createTensor(
-                o_environment,
-                LongBuffer.wrap(stateIndices),
-                new long[]{1, 71}
-        );
-
-        return stateIdxTensor;
-    }
-
-    private OnnxTensor creatTrumpOneHot(Mode mode) throws OrtException {
-        float[] trump = new float[7];
-
         switch (mode.getTrumpfName()){
             case OBEABE:
-                trump[6] = 1;
+                stateIndices[71] = 6;
                 break;
+
             case UNDEUFE:
-                trump[5] = 1;
+                stateIndices[71] = 5;
                 break;
+
             case TRUMPF:
-                trump[mode.getTrumpfColor().ordinal() + 1] = 1;
+                stateIndices[71] = mode.getTrumpfColor().ordinal() + 1;
                 break;
+
             case SCHIEBE:
-                break;
+                stateIndices[71] = 0;
         }
 
-        OnnxTensor trumpTensor = OnnxTensor.createTensor(
+        return OnnxTensor.createTensor(
                 o_environment,
-                FloatBuffer.wrap(trump),
-                new long[]{1, 7}
+                LongBuffer.wrap(stateIndices),
+                new long[]{1, 72}
         );
+    }
 
-        return trumpTensor;
+    private OnnxTensor creatTrumpState(List<Card> hand, boolean isGschobe) throws OrtException {
+        long[] stateIndices = new long[10];
+        int i = 0;
+        for(Card card : hand) {
+            stateIndices[i] = card.ordinal() + 1;
+        }
+        stateIndices[9] = isGschobe ? 1 : 0;
+
+        return OnnxTensor.createTensor(
+                o_environment,
+                LongBuffer.wrap(stateIndices),
+                new long[]{1, 10}
+        );
+    }
+
+    private long getTime(List<Card> hand, Mode mode){
+        try {
+            OnnxTensor state = creatState(hand, mode);
+            Map<String, OnnxTensor> input = new HashMap<>();
+            input.put("state", state);
+
+            try(OrtSession.Result output = o_sessionTime.run(input)) {
+                OnnxTensor action = (OnnxTensor) output.get("action").get();
+                long time = (long) ((float[][]) action.getValue())[0][0];
+                log.info("Time for action: {}", time);
+                return time;
+            }
+
+        } catch (OrtException e) {
+            log.error(e.getMessage());
+        }
+        return 10;
     }
 
     @Override
     public Mode chooseTrumpf(Set<Card> availableCards, GameSession session, boolean isGschobe) {
+        List<Card> hand = new ArrayList<>(availableCards);
+        long time = getTime(hand, Mode.shift()); // shift is mapped to no trump
+        try {
+            OnnxTensor state = creatTrumpState(hand, isGschobe);
+            Map<String, OnnxTensor> input = new HashMap<>();
+            input.put("state", state);
+
+            try(OrtSession.Result output = o_sessionTrump.run(input)) {
+                OnnxTensor action = (OnnxTensor) output.get("action").get();
+                float[] actionProbabilities = action.getFloatBuffer().array();
+
+                List<Map.Entry<Integer, Float>> prob = new ArrayList<>();
+                for(int i = 0; i < actionProbabilities.length; i++ ) {
+                    prob.add(new AbstractMap.SimpleEntry<>(i, actionProbabilities[i]));
+                }
+
+                prob.sort(Map.Entry.comparingByValue());
+
+                for(Map.Entry<Integer, Float> entry : prob) {
+                    log.info("Probability: {} {}", entry.getKey() ,entry.getValue());
+                }
+
+                for(int i = prob.size() - 1; i >= 0; i--) {
+                    Map.Entry<Integer, Float> probEntry = prob.get(i);
+                    if(probEntry.getKey() == 0 && !isGschobe){
+                        log.info("Trumpf gschobe: {}", probEntry.getValue());
+                        return Mode.shift();
+                    }
+
+                    else{
+                        Mode mode = Mode.standardModes().get(probEntry.getKey() - 1);
+                        log.info("Trumpf: {}", mode);
+                        return mode;
+                    }
+
+                }
+            }
+
+        } catch (OrtException e) {
+            throw new RuntimeException(e);
+        }
         return null;
     }
 
@@ -107,42 +168,47 @@ public class AiJass implements JassStrategy {
     public Card chooseCard(Set<Card> availableCards, GameSession session) {
         List<Card> cards = new ArrayList<>(availableCards);
         Round round = session.getCurrentRound();
+        long time = getTime(cards, round.getMode());
         try {
-            OnnxTensor state = creatState(cards);
-            OnnxTensor trump = creatTrumpOneHot(round.getMode());
+            OnnxTensor state = creatState(cards, round.getMode());
 
             Map<String, OnnxTensor> input = new HashMap<>();
-            input.put("state_idx", state);
-            input.put("trump_onehot", trump);
+            input.put("state", state);
 
-            try(OrtSession.Result output = o_session.run(input)) {
-                OnnxTensor policyLogProbs = (OnnxTensor)output.get("policy_log_probs").get();
-                float[] logProbabilities = policyLogProbs.getFloatBuffer().array();
+            try(OrtSession.Result output = o_sessionPlay.run(input)) {
+                OnnxTensor action = (OnnxTensor)output.get("action").get();
+                float[] actionProbabilities = action.getFloatBuffer().array();
 
                 List<Map.Entry<Integer, Float>> prob = new ArrayList<>();
-                for(int i = 0; i < logProbabilities.length; i++ ) {
-                    prob.add(new AbstractMap.SimpleEntry<>(i, logProbabilities[i]));
+                for(int i = 0; i < actionProbabilities.length; i++ ) {
+                    prob.add(new AbstractMap.SimpleEntry<>(i, actionProbabilities[i]));
                 }
 
                 prob.sort(Map.Entry.comparingByValue());
 
                 for(Map.Entry<Integer, Float> probEntry : prob) {
                     if(probEntry.getKey() < cards.size()) {
-                        log.info(cards.get(probEntry.getKey()).toString() + ":" + probEntry.getValue());
+                        log.info("{}:{}", cards.get(probEntry.getKey()).toString(), probEntry.getValue());
                     }
                     else {
-                        log.info("Empty: " + probEntry.getValue());
+                        log.info("Empty: {}", probEntry.getValue());
                     }
                 }
-
+                TimeUnit.SECONDS.sleep(time);
                 for(int i = prob.size() - 1; i >= 0; i--) {
                     if(prob.get(i).getKey() >= cards.size()) {
                         log.info("trying to play empty card");
                         continue;
                     }
-                    if(round.isLegal(cards.get(prob.get(i).getKey())))
-                       return cards.get(prob.get(i).getKey());
+                    if(round.isLegal(cards.get(prob.get(i).getKey()), cards)) {
+                        return cards.get(prob.get(i).getKey());
+                    }
+                    else{
+                        log.info("trying to play illegal card {}", cards.get(prob.get(i).getKey()));
+                    }
                 }
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
             }
 
         } catch (OrtException e) {
@@ -154,16 +220,16 @@ public class AiJass implements JassStrategy {
     @Override
     public void onMoveMade(Move move, GameSession session) {
         moveCount++;
-        ontable.add(move.getPlayedCard());
+        onTable.add(move.getPlayedCard());
 
         if(moveCount % 4 == 0){
-            history.addAll(ontable);
-            ontable.clear();
+            history.addAll(onTable);
+            onTable.clear();
         }
 
         if (moveCount % 36 == 0){
             history.clear();
-            ontable.clear();
+            onTable.clear();
             moveCount = 0;
         }
 

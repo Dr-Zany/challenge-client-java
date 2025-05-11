@@ -18,18 +18,22 @@ import java.util.Arrays;
  */
 public class Application {
     //CHALLENGE2017: Set your bot name
-    private static final String BOT_NAME = "awesomeJavaBot";
+    private static final String BOT_NAME = "Bob";
     //CHALLENGE2017: Set your own strategy
 
     private static final String LOCAL_URL = "ws://127.0.0.1:3000";
 
     public static void main(String[] args) throws Exception {
-        String modelPath = args[0];
-        System.out.println(modelPath);
-        //String websocketUrl = parseWebsocketUrlOrDefault(args);
-        String websocketUrl = LOCAL_URL;
+        if(args.length != 4)
+            throw new IllegalArgumentException("Wrong number of arguments");
+        String websocketUrl = args[0];
+        String modelPlayPath = args[1];
+        String modelTrumpPath = args[2];
+        String modelTimePath = args[3];
+        System.out.println(modelPlayPath);
 
-        JassStrategy strategy = new AiJass(modelPath);
+
+        JassStrategy strategy = new AiJass(modelPlayPath, modelTrumpPath, modelTimePath);
         Player myLocalPlayer = new Player(BOT_NAME, strategy);
 
         System.out.println("Connecting... Server socket URL: " + websocketUrl);
