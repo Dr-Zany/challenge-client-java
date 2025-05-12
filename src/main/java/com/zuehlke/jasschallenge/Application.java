@@ -24,17 +24,18 @@ public class Application {
     private static final String LOCAL_URL = "ws://127.0.0.1:3000";
 
     public static void main(String[] args) throws Exception {
-        if(args.length != 4)
-            throw new IllegalArgumentException("Wrong number of arguments");
-        String websocketUrl = args[0];
-        String modelPlayPath = args[1];
-        String modelTrumpPath = args[2];
-        String modelTimePath = args[3];
-        System.out.println(modelPlayPath);
+        String websocketUrl = System.getenv().getOrDefault("URL", LOCAL_URL);
+        String name = System.getenv().getOrDefault("NAME", BOT_NAME);
+        if(System.getenv("MODEL_PATH") == null) {
+            throw new IllegalArgumentException("MODEL_PATH env var is required");
+        }
+        String modelPlayPath = System.getenv("MODEL_PATH") + "jass_play_dnn.onnx"  ;
+        String modelTrumpPath = System.getenv("MODEL_PATH") + "jass_trump_dnn.onnx";
+        String modelTimePath = System.getenv("MODEL_PATH") + "jass_time_dnn.onnx";
 
 
         JassStrategy strategy = new AiJass(modelPlayPath, modelTrumpPath, modelTimePath);
-        Player myLocalPlayer = new Player(BOT_NAME, strategy);
+        Player myLocalPlayer = new Player(name, strategy);
 
         System.out.println("Connecting... Server socket URL: " + websocketUrl);
         startGame(websocketUrl, myLocalPlayer, SessionType.TOURNAMENT);

@@ -27,18 +27,5 @@ dependencies {
 }
 
 run {
-    def argList = []
-    if (project.hasProperty("url") ) {
-        argList << project.url
-    }
-    if (project.hasProperty("playModelPath") ) {
-        argList << project.playModelPath
-    }
-    if (project.hasProperty("trumpModelPath") ) {
-        argList << project.trumpModelPath
-    }
-    if (project.hasProperty("timeModelPath") ) {
-        argList << project.timeModelPath
-    }
-    args argList
+
 }
