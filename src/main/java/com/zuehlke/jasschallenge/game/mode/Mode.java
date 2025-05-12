@@ -30,11 +30,11 @@ public abstract class Mode {
     public static List<Mode> standardModes() {
         List<Mode> modes = new LinkedList<>();
         modes.add(trump(Color.DIAMONDS));
-        modes.add(trump(Color.CLUBS));
         modes.add(trump(Color.HEARTS));
         modes.add(trump(Color.SPADES));
-        modes.add(bottomUp());
+        modes.add(trump(Color.CLUBS));
         modes.add(topDown());
+        modes.add(bottomUp());
         return modes;
     }
 
