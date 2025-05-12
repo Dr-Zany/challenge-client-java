@@ -11,16 +11,6 @@ public enum Card {
     DIAMOND_KING(Color.DIAMONDS, CardValue.KING),
     DIAMOND_ACE(Color.DIAMONDS, CardValue.ACE),
 
-    CLUB_SIX(Color.CLUBS, CardValue.SIX),
-    CLUB_SEVEN(Color.CLUBS, CardValue.SEVEN),
-    CLUB_EIGHT(Color.CLUBS, CardValue.EIGHT),
-    CLUB_NINE(Color.CLUBS, CardValue.NINE),
-    CLUB_TEN(Color.CLUBS, CardValue.TEN),
-    CLUB_JACK(Color.CLUBS, CardValue.JACK),
-    CLUB_QUEEN(Color.CLUBS, CardValue.QUEEN),
-    CLUB_KING(Color.CLUBS, CardValue.KING),
-    CLUB_ACE(Color.CLUBS, CardValue.ACE),
-
     HEART_SIX(Color.HEARTS, CardValue.SIX),
     HEART_SEVEN(Color.HEARTS, CardValue.SEVEN),
     HEART_EIGHT(Color.HEARTS, CardValue.EIGHT),
@@ -31,7 +21,6 @@ public enum Card {
     HEART_KING(Color.HEARTS, CardValue.KING),
     HEART_ACE(Color.HEARTS, CardValue.ACE),
 
-
     SPADE_SIX(Color.SPADES, CardValue.SIX),
     SPADE_SEVEN(Color.SPADES, CardValue.SEVEN),
     SPADE_EIGHT(Color.SPADES, CardValue.EIGHT),
@@ -40,7 +29,17 @@ public enum Card {
     SPADE_JACK(Color.SPADES, CardValue.JACK),
     SPADE_QUEEN(Color.SPADES, CardValue.QUEEN),
     SPADE_KING(Color.SPADES, CardValue.KING),
-    SPADE_ACE(Color.SPADES, CardValue.ACE);
+    SPADE_ACE(Color.SPADES, CardValue.ACE),
+
+    CLUB_SIX(Color.CLUBS, CardValue.SIX),
+    CLUB_SEVEN(Color.CLUBS, CardValue.SEVEN),
+    CLUB_EIGHT(Color.CLUBS, CardValue.EIGHT),
+    CLUB_NINE(Color.CLUBS, CardValue.NINE),
+    CLUB_TEN(Color.CLUBS, CardValue.TEN),
+    CLUB_JACK(Color.CLUBS, CardValue.JACK),
+    CLUB_QUEEN(Color.CLUBS, CardValue.QUEEN),
+    CLUB_KING(Color.CLUBS, CardValue.KING),
+    CLUB_ACE(Color.CLUBS, CardValue.ACE);
 
     private final CardValue value;
     private final Color color;
