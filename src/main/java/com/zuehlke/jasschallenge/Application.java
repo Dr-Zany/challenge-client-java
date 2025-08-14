@@ -31,10 +31,9 @@ public class Application {
         }
         String modelPlayPath = System.getenv("MODEL_PATH") + "jass_play_dnn.onnx"  ;
         String modelTrumpPath = System.getenv("MODEL_PATH") + "jass_trump_dnn.onnx";
-        String modelTimePath = System.getenv("MODEL_PATH") + "jass_time_dnn.onnx";
 
 
-        JassStrategy strategy = new AiJass(modelPlayPath, modelTrumpPath, modelTimePath);
+        JassStrategy strategy = new AiJass(modelPlayPath, modelTrumpPath);
         Player myLocalPlayer = new Player(name, strategy);
 
         System.out.println("Connecting... Server socket URL: " + websocketUrl);

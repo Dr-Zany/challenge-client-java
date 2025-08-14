@@ -20,19 +20,17 @@ public class AiJass implements JassStrategy {
     OrtSession.SessionOptions o_options;
     OrtSession o_sessionPlay;
     OrtSession o_sessionTrump;
-    OrtSession o_sessionTime;
 
     int moveCount = 0;
     List<Card> history = new Vector<>();
     List<Card> onTable = new Vector<>();
 
-    public AiJass(String playPath, String trumpPath, String timePath) throws OrtException {
+    public AiJass(String playPath, String trumpPath) throws OrtException {
         o_environment = OrtEnvironment.getEnvironment();
         o_options = new OrtSession.SessionOptions();
 
         o_sessionPlay = o_environment.createSession(playPath, o_options);
         o_sessionTrump = o_environment.createSession(trumpPath, o_options);
-        o_sessionTime = o_environment.createSession(timePath, o_options);
     }
 
 
@@ -89,9 +87,10 @@ public class AiJass implements JassStrategy {
         int i = 0;
         for(Card card : hand) {
             stateIndices[i] = card.ordinal() + 1;
+            i++;
         }
         stateIndices[9] = isGschobe ? 1 : 0;
-
+        log.info(Arrays.toString(stateIndices));
         return OnnxTensor.createTensor(
                 o_environment,
                 LongBuffer.wrap(stateIndices),
@@ -100,22 +99,7 @@ public class AiJass implements JassStrategy {
     }
 
     private long getTime(List<Card> hand, Mode mode){
-        try {
-            OnnxTensor state = creatState(hand, mode);
-            Map<String, OnnxTensor> input = new HashMap<>();
-            input.put("state", state);
-
-            try(OrtSession.Result output = o_sessionTime.run(input)) {
-                OnnxTensor action = (OnnxTensor) output.get("action").get();
-                long time = (long) ((float[][]) action.getValue())[0][0];
-                log.info("Time for action: {}", time);
-                return time;
-            }
-
-        } catch (OrtException e) {
-            log.error(e.getMessage());
-        }
-        return 10;
+        return 1;
     }
 
     @Override
