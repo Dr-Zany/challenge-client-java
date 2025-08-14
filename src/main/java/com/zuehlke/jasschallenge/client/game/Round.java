@@ -1,12 +1,14 @@
 package com.zuehlke.jasschallenge.client.game;
 
 import com.zuehlke.jasschallenge.game.cards.Card;
+import com.zuehlke.jasschallenge.game.cards.CardValue;
 import com.zuehlke.jasschallenge.game.cards.Color;
 import com.zuehlke.jasschallenge.game.mode.Mode;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toSet;
 
@@ -55,6 +57,17 @@ public class Round {
         if (moves.size() == 0) return null;
 
         return moves.get(0).getPlayedCard().getColor();
+    }
+
+    public boolean isLegal(Card card, List<Card> hand) {
+        if (card == null) return false;
+        Color c = card.getColor();
+        return c == getRoundColor() ||
+                c == getMode().getTrumpfColor() ||
+                hand.stream().noneMatch(n -> n.getColor().equals(getRoundColor())) ||
+                getRoundColor() == getMode().getTrumpfColor() &&
+                        hand.stream().filter(e -> e.getColor().equals(getRoundColor())).count() == 1 &&
+                        hand.stream().filter(e -> e.getColor().equals(getMode().getTrumpfColor())).collect(Collectors.toList()).get(0).getValue() == CardValue.JACK;
     }
 
     public Player getWinner() {

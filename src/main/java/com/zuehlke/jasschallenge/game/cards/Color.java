@@ -1,10 +1,10 @@
 package com.zuehlke.jasschallenge.game.cards;
 
 public enum Color {
-    HEARTS("(H)"),
     DIAMONDS("(D)"),
-    CLUBS("(C)"),
-    SPADES("(S)");
+    HEARTS("(H)"),
+    SPADES("(S)"),
+    CLUBS("(C)");
 
 
     private final String sign;

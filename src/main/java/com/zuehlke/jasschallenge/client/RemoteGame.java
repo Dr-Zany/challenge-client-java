@@ -6,6 +6,7 @@ import com.zuehlke.jasschallenge.client.websocket.RemoteGameSocket;
 import com.zuehlke.jasschallenge.messages.type.SessionType;
 import org.eclipse.jetty.websocket.client.ClientUpgradeRequest;
 import org.eclipse.jetty.websocket.client.WebSocketClient;
+import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,7 +29,8 @@ public class RemoteGame implements Game {
 
     @Override
     public void start() throws Exception {
-        final WebSocketClient client = new WebSocketClient();
+        SslContextFactory sslContextFactory = new SslContextFactory();
+        final WebSocketClient client = new WebSocketClient(sslContextFactory);
         try {
             RemoteGameSocket socket = new RemoteGameSocket(new GameHandler(player, sessionType));
             client.start();

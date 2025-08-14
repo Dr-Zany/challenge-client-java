@@ -2,6 +2,8 @@ package com.zuehlke.jasschallenge;
 
 import com.zuehlke.jasschallenge.client.RemoteGame;
 import com.zuehlke.jasschallenge.client.game.Player;
+import com.zuehlke.jasschallenge.client.game.strategy.AiJass;
+import com.zuehlke.jasschallenge.client.game.strategy.JassStrategy;
 import com.zuehlke.jasschallenge.client.game.strategy.RandomJassStrategy;
 import com.zuehlke.jasschallenge.messages.type.SessionType;
 import java.util.Arrays;
@@ -16,16 +18,23 @@ import java.util.Arrays;
  */
 public class Application {
     //CHALLENGE2017: Set your bot name
-    private static final String BOT_NAME = "awesomeJavaBot";
+    private static final String BOT_NAME = "Bob";
     //CHALLENGE2017: Set your own strategy
-    private static final RandomJassStrategy STRATEGY = new RandomJassStrategy();
 
     private static final String LOCAL_URL = "ws://127.0.0.1:3000";
 
     public static void main(String[] args) throws Exception {
-        String websocketUrl = parseWebsocketUrlOrDefault(args);
+        String websocketUrl = System.getenv().getOrDefault("URL", LOCAL_URL);
+        String name = System.getenv().getOrDefault("NAME", BOT_NAME);
+        if(System.getenv("MODEL_PATH") == null) {
+            throw new IllegalArgumentException("MODEL_PATH env var is required");
+        }
+        String modelPlayPath = System.getenv("MODEL_PATH") + "jass_play_dnn.onnx"  ;
+        String modelTrumpPath = System.getenv("MODEL_PATH") + "jass_trump_dnn.onnx";
 
-        Player myLocalPlayer = new Player(BOT_NAME, STRATEGY);
+
+        JassStrategy strategy = new AiJass(modelPlayPath, modelTrumpPath);
+        Player myLocalPlayer = new Player(name, strategy);
 
         System.out.println("Connecting... Server socket URL: " + websocketUrl);
         startGame(websocketUrl, myLocalPlayer, SessionType.TOURNAMENT);
